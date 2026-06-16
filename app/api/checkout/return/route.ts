@@ -45,8 +45,11 @@ export async function GET(request: Request) {
       .eq("id", userId)
       .maybeSingle();
 
-    // Flip to pro.
-    await admin.from("users").update({ plan: "pro" }).eq("id", userId);
+    // Flip to pro. Upsert (not update) so it works even if no public.users row
+    // exists yet — magic-link sign-in only creates an auth.users row.
+    await admin
+      .from("users")
+      .upsert({ id: userId, plan: "pro" }, { onConflict: "id" });
 
     // Make sure this scan is linked, then unlock every finding on the user's scans.
     await admin

@@ -62,14 +62,19 @@ export async function GET(request: Request) {
     });
     const ghUser = (await ghUserRes.json()) as { login?: string };
 
+    // Upsert: magic-link sign-in only creates an auth.users row, so a
+    // public.users row may not exist yet — UPDATE would touch zero rows and
+    // silently drop the token. onConflict on the PK creates-or-updates.
     const admin = createServerClient();
-    await admin
-      .from("users")
-      .update({
+    await admin.from("users").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
         github_token: tokenData.access_token,
         github_login: ghUser.login ?? null,
-      })
-      .eq("id", user.id);
+      },
+      { onConflict: "id" },
+    );
 
     return back("?github=connected");
   } catch (err) {
