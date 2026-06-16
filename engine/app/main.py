@@ -38,4 +38,4 @@ def scan(req: ScanRequest) -> ScanResponse:
     pipeline is subprocess/IO heavy. The scan row is transitioned to 'running'
     immediately and to 'awaiting_report' (or 'failed') on completion.
     """
-    return run_pipeline(req.scan_id, req.repo_url)
+    return run_pipeline(req.scan_id, req.repo_url, req.github_token)

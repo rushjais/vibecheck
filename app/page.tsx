@@ -1,4 +1,5 @@
 import ScanForm from "@/components/ScanForm";
+import RepoPicker from "@/components/RepoPicker";
 
 const CHECKS = [
   {
@@ -52,6 +53,8 @@ export default function Home() {
 
           <div className="mt-9 flex w-full flex-col items-center">
             <ScanForm />
+            {/* Shown only for signed-in, GitHub-connected (Pro) users. */}
+            <RepoPicker />
           </div>
         </section>
 

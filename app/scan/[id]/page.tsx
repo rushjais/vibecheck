@@ -65,11 +65,12 @@ export async function generateMetadata({
   const supabase = createServerClient();
   const { data: scan } = await supabase
     .from("scans")
-    .select("repo_url, status, risk_score")
+    .select("repo_url, status, risk_score, user_id")
     .eq("id", params.id)
     .maybeSingle();
 
-  if (!scan || scan.status !== "done") {
+  // Don't leak a private repo's name/score in metadata.
+  if (!scan || scan.status !== "done" || scan.user_id !== null) {
     return { title: "LaunchGuard scan" };
   }
 
@@ -98,6 +99,18 @@ export default async function ScanPage({
     notFound();
   }
 
+  // Private-repo reports (scan tied to a user) are owner-only. Public scans
+  // (user_id null) stay link-viewable.
+  const isPrivate = scan.user_id !== null;
+
+  const {
+    data: { user },
+  } = await createSupabaseServer().auth.getUser();
+
+  if (isPrivate && (!user || user.id !== scan.user_id)) {
+    notFound();
+  }
+
   if (scan.status === "done") {
     const { data: rows } = await supabase
       .from("findings")
@@ -106,33 +119,26 @@ export default async function ScanPage({
 
     const findings = orderFindings(rows ?? []).map(toClientFinding);
 
-    // Is the *viewer* a Pro user? Only then do we offer the write-scope PR flow.
-    let isPro = false;
+    // Any signed-in user gets the auto-fix PR panel (friends-only test).
     let githubConnected = false;
     let githubLogin: string | null = null;
     let prs: FixPr[] = [];
 
-    const {
-      data: { user },
-    } = await createSupabaseServer().auth.getUser();
     if (user) {
       const { data: account } = await supabase
         .from("users")
-        .select("plan, github_login, github_token")
+        .select("github_login, github_token")
         .eq("id", user.id)
         .maybeSingle();
-      isPro = account?.plan === "pro";
       githubConnected = Boolean(account?.github_token);
       githubLogin = account?.github_login ?? null;
 
-      if (isPro) {
-        const { data: prRows } = await supabase
-          .from("fix_prs")
-          .select("pr_url, pr_number, title, finding_count")
-          .eq("scan_id", scan.id)
-          .order("created_at", { ascending: false });
-        prs = prRows ?? [];
-      }
+      const { data: prRows } = await supabase
+        .from("fix_prs")
+        .select("pr_url, pr_number, title, finding_count")
+        .eq("scan_id", scan.id)
+        .order("created_at", { ascending: false });
+      prs = prRows ?? [];
     }
 
     return (
@@ -145,7 +151,8 @@ export default async function ScanPage({
         }
         findings={findings}
         unlocked={searchParams.unlocked === "1"}
-        isPro={isPro}
+        isSignedIn={Boolean(user)}
+        isPrivate={isPrivate}
         githubConnected={githubConnected}
         githubLogin={githubLogin}
         prs={prs}

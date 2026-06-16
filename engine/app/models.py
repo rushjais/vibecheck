@@ -8,6 +8,9 @@ from pydantic import BaseModel
 class ScanRequest(BaseModel):
     scan_id: str
     repo_url: str
+    # Optional OAuth token for cloning a private repo the caller has access to.
+    # Never logged.
+    github_token: Optional[str] = None
 
 
 class RawFinding(BaseModel):

@@ -37,14 +37,29 @@ def validate_url(repo_url: str) -> None:
         raise CloneError("URL must point to a specific repo (owner/repo).")
 
 
-def clone_repo(repo_url: str) -> tuple[str, str]:
+def clone_repo(repo_url: str, github_token: str | None = None) -> tuple[str, str]:
     """Shallow-clone into an ephemeral temp dir.
 
     Returns (tmp_root, repo_dir). Caller MUST delete tmp_root in a finally
     block. Credential prompts are disabled so private repos fail fast instead
     of hanging.
+
+    When github_token is provided, the repo is cloned over an authenticated
+    HTTPS URL (x-access-token). The token is NEVER logged: we don't echo the
+    clone command or git's stderr, and error messages stay generic.
     """
     validate_url(repo_url)
+
+    parsed = urlparse(repo_url)
+    parts = [p for p in parsed.path.split("/") if p]
+    owner, repo = parts[0], parts[1]
+    if repo.endswith(".git"):
+        repo = repo[: -len(".git")]
+
+    if github_token:
+        clone_url = f"https://x-access-token:{github_token}@github.com/{owner}/{repo}.git"
+    else:
+        clone_url = repo_url
 
     tmp_root = tempfile.mkdtemp(prefix="lg_scan_")
     repo_dir = os.path.join(tmp_root, "repo")
@@ -63,7 +78,7 @@ def clone_repo(repo_url: str) -> tuple[str, str]:
                 "--depth", "1",
                 "--single-branch",
                 "--no-tags",
-                repo_url,
+                clone_url,
                 repo_dir,
             ],
             cwd=tmp_root,
@@ -74,14 +89,13 @@ def clone_repo(repo_url: str) -> tuple[str, str]:
             check=True,
         )
     except subprocess.TimeoutExpired as exc:
-        raise CloneError("Cloning the repository timed out.") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip().splitlines()
-        detail = stderr[-1] if stderr else "git clone failed"
-        # Don't leak full git noise; private/missing repos land here.
+        # Do not attach exc (its cmd/output may contain the tokenized URL).
+        raise CloneError("Cloning the repository timed out.") from None
+    except subprocess.CalledProcessError:
+        # Never surface git's stderr or the command — both can contain the token.
         raise CloneError(
-            "Could not clone the repository — make sure it's public."
-        ) from exc
+            "Could not clone the repository — check the URL and your access."
+        ) from None
 
     return tmp_root, repo_dir
 

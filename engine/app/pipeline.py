@@ -37,12 +37,16 @@ def _run_scanner(name: str, fn, *args) -> tuple[list[RawFinding], str]:
         return [], f"error: {exc}"
 
 
-def run_pipeline(scan_id: str, repo_url: str) -> ScanResponse:
+def run_pipeline(
+    scan_id: str, repo_url: str, github_token: str | None = None
+) -> ScanResponse:
     supabase_client.set_running(scan_id)
 
     tmp_root: str | None = None
     try:
-        tmp_root, repo_dir = clone_repo(repo_url)
+        # github_token (if present) authenticates the clone of a private repo.
+        # It is passed straight to git and never logged.
+        tmp_root, repo_dir = clone_repo(repo_url, github_token)
 
         # SAFETY: enforce size/file limits BEFORE any scanner runs.
         file_count, total_bytes = enforce_limits(repo_dir)

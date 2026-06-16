@@ -19,7 +19,8 @@ export default function ReportView({
   summary,
   findings,
   unlocked = false,
-  isPro = false,
+  isSignedIn = false,
+  isPrivate = false,
   githubConnected = false,
   githubLogin = null,
   prs = [],
@@ -30,7 +31,8 @@ export default function ReportView({
   summary: string;
   findings: ClientFinding[];
   unlocked?: boolean;
-  isPro?: boolean;
+  isSignedIn?: boolean;
+  isPrivate?: boolean;
   githubConnected?: boolean;
   githubLogin?: string | null;
   prs?: FixPr[];
@@ -85,13 +87,16 @@ export default function ReportView({
           </span>
           LaunchGuard
         </Link>
-        <CopyButton
-          text={shareUrl}
-          idleLabel="Share this report"
-          copiedLabel="Link copied!"
-          iconIdle={<ShareIcon className="h-4 w-4" />}
-          className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50"
-        />
+        {/* No public share link for private-repo reports. */}
+        {!isPrivate && (
+          <CopyButton
+            text={shareUrl}
+            idleLabel="Share this report"
+            copiedLabel="Link copied!"
+            iconIdle={<ShareIcon className="h-4 w-4" />}
+            className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50"
+          />
+        )}
       </header>
 
       <main className="mx-auto max-w-3xl px-5 pb-24">
@@ -158,8 +163,9 @@ export default function ReportView({
           )}
         </section>
 
-        {/* Pro: open a fix PR. Never rendered for free/anonymous viewers. */}
-        {isPro && findings.length > 0 && (
+        {/* Auto-fix PR panel — any signed-in user (friends-only test). Not
+            shown to anonymous viewers of a shared public report. */}
+        {isSignedIn && findings.length > 0 && (
           <FixPanel
             scanId={scanId}
             githubConnected={githubConnected}
