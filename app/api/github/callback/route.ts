@@ -10,10 +10,14 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = url.origin;
   const code = url.searchParams.get("code");
-  const scanId = url.searchParams.get("state") ?? "";
+  const state = url.searchParams.get("state") ?? "";
 
+  // state is "home" (or absent) for a home-page connect, or a scan id.
+  const fromHome = !state || state === "home";
   const back = (suffix: string) =>
-    NextResponse.redirect(new URL(`/scan/${scanId}${suffix}`, origin));
+    NextResponse.redirect(
+      new URL(fromHome ? `/${suffix}` : `/scan/${state}${suffix}`, origin),
+    );
 
   const supabase = createSupabaseServer();
   const {

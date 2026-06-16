@@ -11,6 +11,7 @@ import FindingCard, {
 import CopyButton from "@/components/CopyButton";
 import PaywallModal from "@/components/PaywallModal";
 import FixPanel, { type FixPr } from "@/components/FixPanel";
+import AuthControl from "@/components/AuthControl";
 
 export default function ReportView({
   scanId,
@@ -87,16 +88,19 @@ export default function ReportView({
           </span>
           LaunchGuard
         </Link>
-        {/* No public share link for private-repo reports. */}
-        {!isPrivate && (
-          <CopyButton
-            text={shareUrl}
-            idleLabel="Share this report"
-            copiedLabel="Link copied!"
-            iconIdle={<ShareIcon className="h-4 w-4" />}
-            className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50"
-          />
-        )}
+        <div className="flex items-center gap-3">
+          {/* No public share link for private-repo reports. */}
+          {!isPrivate && (
+            <CopyButton
+              text={shareUrl}
+              idleLabel="Share this report"
+              copiedLabel="Link copied!"
+              iconIdle={<ShareIcon className="h-4 w-4" />}
+              className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50"
+            />
+          )}
+          <AuthControl />
+        </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-5 pb-24">

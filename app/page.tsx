@@ -1,5 +1,7 @@
 import ScanForm from "@/components/ScanForm";
 import RepoPicker from "@/components/RepoPicker";
+import AuthControl from "@/components/AuthControl";
+import PrivateRepoEntry from "@/components/PrivateRepoEntry";
 
 const CHECKS = [
   {
@@ -29,7 +31,7 @@ export default function Home() {
           </span>
           LaunchGuard
         </div>
-        <span className="text-sm text-neutral-500">No sign-up required</span>
+        <AuthControl />
       </header>
 
       <main className="mx-auto max-w-5xl px-6">
@@ -53,7 +55,9 @@ export default function Home() {
 
           <div className="mt-9 flex w-full flex-col items-center">
             <ScanForm />
-            {/* Shown only for signed-in, GitHub-connected (Pro) users. */}
+            {/* Private-repo entry: sign-in / connect prompts driven by /api/me. */}
+            <PrivateRepoEntry />
+            {/* Dropdown of your repos — shows only when signed in + connected. */}
             <RepoPicker />
           </div>
         </section>
