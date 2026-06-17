@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase";
 import { validateRepoUrl } from "@/lib/validate-repo";
 import { buildFileExcerpts } from "@/lib/github";
 import { generateReport, ReportGenerationError } from "@/lib/report";
+import { checkScanRateLimit, clientIpFrom } from "@/lib/rate-limit";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -16,6 +17,17 @@ type FindingInsert = Database["public"]["Tables"]["findings"]["Insert"];
 const FREE_FINDINGS = 3;
 
 export async function POST(request: Request) {
+  // Per-IP rate limit (same Upstash limiter as /api/scans) — protect the
+  // Anthropic call from abuse. Runs before any report generation.
+  const ip = clientIpFrom(request);
+  const { success } = await checkScanRateLimit(ip);
+  if (!success) {
+    return NextResponse.json(
+      { error: "You've hit the limit. Try again in an hour." },
+      { status: 429 },
+    );
+  }
+
   let body: { scan_id?: unknown };
   try {
     body = await request.json();
