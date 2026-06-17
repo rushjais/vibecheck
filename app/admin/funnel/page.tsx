@@ -19,11 +19,11 @@ function pct(n: number, d: number): string {
 export default async function FunnelPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const sp = await searchParams;
   const passphrase = process.env.ADMIN_PASSPHRASE;
-  const provided =
-    typeof searchParams.key === "string" ? searchParams.key : "";
+  const provided = typeof sp.key === "string" ? sp.key : "";
 
   // Gate: hardcoded passphrase env var (placeholder auth for now).
   if (!passphrase || provided !== passphrase) {

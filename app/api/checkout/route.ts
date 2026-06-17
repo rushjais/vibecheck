@@ -1,92 +1,87 @@
 import { NextResponse } from "next/server";
+import { getStripe } from "@/lib/stripe";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createServerClient } from "@/lib/supabase";
-import { getStripe } from "@/lib/stripe";
-import { PRO_PRICE_CENTS } from "@/lib/pricing";
 import { logFunnelEvent } from "@/lib/analytics-server";
+import { enforceApiRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Checkout kickoff. Reached after the magic-link callback establishes a
- * session. Links the anonymous scan to the now-authenticated user, creates a
- * Stripe Checkout session, fires `checkout_started`, and redirects to Stripe.
+ * Start a one-time ($9) Stripe Checkout to buy a pack of full-report scans.
+ * Credits are tied to the account, so sign-in is required. The webhook grants
+ * the credits on payment; this route only opens Checkout.
  */
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const origin = url.origin;
-  const scanId = url.searchParams.get("scan");
+export async function POST(request: Request) {
+  const limited = await enforceApiRateLimit(request);
+  if (limited) return limited;
 
-  if (!scanId) {
-    return NextResponse.redirect(new URL("/", origin));
+  const origin = new URL(request.url).origin;
+
+  let body: { scan_id?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
   }
+  const scanId = typeof body.scan_id === "string" ? body.scan_id : "";
 
-  // Must be signed in (the magic-link flow guarantees this).
-  const supabase = createSupabaseServer();
+  // Credits are per-account → must be signed in.
   const {
     data: { user },
-  } = await supabase.auth.getUser();
-
+  } = await (await createSupabaseServer()).auth.getUser();
   if (!user) {
-    return NextResponse.redirect(
-      new URL(`/scan/${scanId}?auth=required`, origin),
+    return NextResponse.json(
+      { error: "Please sign in to buy scans.", code: "auth_required" },
+      { status: 401 },
     );
   }
 
-  const admin = createServerClient();
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    console.error("[checkout] STRIPE_PRICE_ID not set");
+    return NextResponse.json(
+      { error: "Checkout isn't configured yet." },
+      { status: 500 },
+    );
+  }
 
-  // Ensure a public.users row exists and link the anonymous scan to this user.
+  // Make sure the user has a public.users row to credit later.
+  const admin = createServerClient();
   await admin
     .from("users")
     .upsert({ id: user.id, email: user.email ?? null }, { onConflict: "id" });
-  await admin
-    .from("scans")
-    .update({ user_id: user.id })
-    .eq("id", scanId)
-    .is("user_id", null);
+
+  const returnPath = scanId ? `/scan/${scanId}?purchased=1` : `/?purchased=1`;
 
   try {
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
+      mode: "payment",
       customer_email: user.email ?? undefined,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: PRO_PRICE_CENTS,
-            recurring: { interval: "month" },
-            product_data: {
-              name: "LaunchGuard Pro",
-              description:
-                "Full report, one-click auto-fix PRs, and continuous monitoring.",
-            },
-          },
-        },
-      ],
-      success_url: `${origin}/api/checkout/return?session_id={CHECKOUT_SESSION_ID}&scan=${scanId}`,
-      cancel_url: `${origin}/scan/${scanId}?checkout=cancel`,
-      metadata: { user_id: user.id, scan_id: scanId },
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}${returnPath}`,
+      cancel_url: `${origin}${scanId ? `/scan/${scanId}` : "/"}?checkout=cancel`,
+      metadata: { userId: user.id, scanId },
     });
 
     await logFunnelEvent({
       name: "checkout_started",
-      scanId,
+      scanId: scanId || null,
       userId: user.id,
       distinctId: user.id,
-      props: { price_cents: PRO_PRICE_CENTS },
     });
 
     if (!session.url) {
       throw new Error("Stripe did not return a checkout URL.");
     }
-    return NextResponse.redirect(session.url, { status: 303 });
+    return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error("[checkout] failed:", err);
-    return NextResponse.redirect(
-      new URL(`/scan/${scanId}?checkout=error`, origin),
+    return NextResponse.json(
+      { error: "Could not start checkout." },
+      { status: 500 },
     );
   }
 }

@@ -5,7 +5,7 @@ import type {
 } from "@/types/database";
 
 /**
- * The report-generation step — LaunchGuard's core IP. Turns raw scanner output
+ * The report-generation step — Vibecheck's core IP. Turns raw scanner output
  * into a plain-English, prioritized report a non-technical founder can act on.
  */
 

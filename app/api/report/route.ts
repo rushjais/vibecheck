@@ -11,6 +11,10 @@ export const maxDuration = 300; // report generation can take a while
 
 type FindingInsert = Database["public"]["Tables"]["findings"]["Insert"];
 
+// Top N findings (highest priority) are free; the rest are gated behind the
+// one-time unlock.
+const FREE_FINDINGS = 3;
+
 export async function POST(request: Request) {
   let body: { scan_id?: unknown };
   try {
@@ -80,7 +84,7 @@ export async function POST(request: Request) {
   // Replace any existing findings (so re-runs are idempotent), then insert.
   await supabase.from("findings").delete().eq("scan_id", scanId);
 
-  const rows: FindingInsert[] = report.findings.map((f) => ({
+  const rows: FindingInsert[] = report.findings.map((f, index) => ({
     scan_id: scanId,
     severity: f.severity,
     category: f.category,
@@ -91,7 +95,7 @@ export async function POST(request: Request) {
     fix_prompt: f.fix_prompt,
     file_path: f.file_path,
     line: f.line,
-    is_locked: false, // friends-only test: everything free, full access
+    is_locked: index >= FREE_FINDINGS, // top 3 free, rest gated
   }));
 
   if (rows.length > 0) {

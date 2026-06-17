@@ -1,4 +1,4 @@
-# LaunchGuard Scan Engine
+# Vibecheck Scan Engine
 
 A standalone FastAPI service that clones a public GitHub repo, runs **static**
 security scanners over it, and writes a compact `raw_findings` blob back to
@@ -38,7 +38,7 @@ Concretely:
 
 ### `GET /health`
 ```json
-{ "status": "ok", "service": "launchguard-scan-engine", "supabase_configured": true }
+{ "status": "ok", "service": "vibecheck-scan-engine", "supabase_configured": true }
 ```
 
 ### `POST /scan`

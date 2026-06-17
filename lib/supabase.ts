@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 /**
- * Typed Supabase clients for LaunchGuard.
+ * Typed Supabase clients for Vibecheck.
  *
  * - `supabase`        — browser/anon client, safe to use anywhere. Uses the
  *                       public anon key and respects Row Level Security.

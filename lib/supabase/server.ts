@@ -15,8 +15,9 @@ const url =
 const anonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "public-anon-key-not-configured";
 
-export function createSupabaseServer() {
-  const cookieStore = cookies();
+export async function createSupabaseServer() {
+  // Next 15: cookies() is async.
+  const cookieStore = await cookies();
 
   return createServerClient<Database>(url, anonKey, {
     cookies: {

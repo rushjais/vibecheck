@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const next = url.searchParams.get("next") ?? "/";
 
   if (token_hash && type) {
-    const supabase = createSupabaseServer();
+    const supabase = (await createSupabaseServer());
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
       return NextResponse.redirect(new URL(next, url.origin));

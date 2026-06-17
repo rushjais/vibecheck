@@ -12,21 +12,26 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const {
     data: { user },
-  } = await createSupabaseServer().auth.getUser();
+  } = await (await createSupabaseServer()).auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ signedIn: false, githubConnected: false });
+    return NextResponse.json({
+      signedIn: false,
+      githubConnected: false,
+      credits: 0,
+    });
   }
 
   const admin = createServerClient();
   const { data } = await admin
     .from("users")
-    .select("github_token")
+    .select("github_token, scan_credits")
     .eq("id", user.id)
     .maybeSingle();
 
   return NextResponse.json({
     signedIn: true,
     githubConnected: Boolean(data?.github_token),
+    credits: data?.scan_credits ?? 0,
   });
 }

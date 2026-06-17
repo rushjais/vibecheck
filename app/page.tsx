@@ -2,6 +2,7 @@ import ScanForm from "@/components/ScanForm";
 import RepoPicker from "@/components/RepoPicker";
 import AuthControl from "@/components/AuthControl";
 import PrivateRepoEntry from "@/components/PrivateRepoEntry";
+import { BRAND_NAME } from "@/lib/brand";
 
 const CHECKS = [
   {
@@ -29,7 +30,7 @@ export default function Home() {
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 text-white">
             <ShieldIcon className="h-4 w-4" />
           </span>
-          LaunchGuard
+          {BRAND_NAME}
         </div>
         <AuthControl />
       </header>
@@ -88,7 +89,7 @@ export default function Home() {
 
       <footer className="border-t border-neutral-200">
         <div className="mx-auto max-w-5xl px-6 py-8 text-center text-sm text-neutral-500">
-          LaunchGuard reads public code only. We never ask for write access on
+          {BRAND_NAME} reads public code only. We never ask for write access on
           the free scan.
         </div>
       </footer>

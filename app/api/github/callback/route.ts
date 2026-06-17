@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createServerClient } from "@/lib/supabase";
+import { enforceApiRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GitHub OAuth callback: exchange the code for a token and store it on the user. */
 export async function GET(request: Request) {
+  const limited = await enforceApiRateLimit(request);
+  if (limited) return limited;
+
   const url = new URL(request.url);
   const origin = url.origin;
   const code = url.searchParams.get("code");
@@ -19,7 +23,7 @@ export async function GET(request: Request) {
       new URL(fromHome ? `/${suffix}` : `/scan/${state}${suffix}`, origin),
     );
 
-  const supabase = createSupabaseServer();
+  const supabase = (await createSupabaseServer());
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -57,7 +61,7 @@ export async function GET(request: Request) {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
         Accept: "application/vnd.github+json",
-        "User-Agent": "LaunchGuard",
+        "User-Agent": "Vibecheck",
       },
     });
     const ghUser = (await ghUserRes.json()) as { login?: string };

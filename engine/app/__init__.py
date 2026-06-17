@@ -1,1 +1,1 @@
-"""LaunchGuard scan engine — static-analysis-only security scanner service."""
+"""Vibecheck scan engine — static-analysis-only security scanner service."""

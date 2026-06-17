@@ -1,5 +1,5 @@
 /**
- * Database types for LaunchGuard.
+ * Database types for Vibecheck.
  *
  * Hand-maintained to mirror /supabase/migrations. Once you have the Supabase
  * CLI linked you can regenerate this file with:
@@ -46,6 +46,7 @@ export interface Database {
           plan: Plan;
           github_login: string | null;
           github_token: string | null;
+          scan_credits: number;
         };
         Insert: {
           id?: string;
@@ -54,6 +55,7 @@ export interface Database {
           plan?: Plan;
           github_login?: string | null;
           github_token?: string | null;
+          scan_credits?: number;
         };
         Update: {
           id?: string;
@@ -62,7 +64,14 @@ export interface Database {
           plan?: Plan;
           github_login?: string | null;
           github_token?: string | null;
+          scan_credits?: number;
         };
+        Relationships: [];
+      };
+      webhook_events: {
+        Row: { id: string; created_at: string };
+        Insert: { id: string; created_at?: string };
+        Update: { id?: string; created_at?: string };
         Relationships: [];
       };
       fix_prs: {
@@ -117,6 +126,7 @@ export interface Database {
           risk_score: number | null;
           summary: string | null;
           raw_findings: Json | null;
+          unlocked: boolean;
           created_at: string;
           completed_at: string | null;
         };
@@ -128,6 +138,7 @@ export interface Database {
           risk_score?: number | null;
           summary?: string | null;
           raw_findings?: Json | null;
+          unlocked?: boolean;
           created_at?: string;
           completed_at?: string | null;
         };
@@ -139,6 +150,7 @@ export interface Database {
           risk_score?: number | null;
           summary?: string | null;
           raw_findings?: Json | null;
+          unlocked?: boolean;
           created_at?: string;
           completed_at?: string | null;
         };

@@ -205,3 +205,35 @@ alter table public.events   force row level security;
 
 -- No CREATE POLICY statements: with RLS on and zero policies, every anon /
 -- authenticated request is denied. Nothing to grant for this test.
+
+
+-- ============================================================================
+-- 0006_scan_unlock.sql
+-- ============================================================================
+
+-- Per-scan one-time unlock ($9). The Stripe webhook flips this to true on
+-- checkout.session.completed; the report page reveals all findings when set.
+
+alter table public.scans
+  add column if not exists unlocked boolean not null default false;
+
+
+-- ============================================================================
+-- 0007_scan_credits.sql
+-- ============================================================================
+
+-- Scan credits. $9 buys a pack of full-report unlocks ("scans"). Spending one
+-- credit sets scans.unlocked = true for a scan. Credits are ONLY ever granted
+-- by the signature-verified Stripe webhook.
+
+alter table public.users
+  add column if not exists scan_credits int not null default 0;
+
+-- Idempotency for the Stripe webhook so retries don't double-credit.
+create table if not exists public.webhook_events (
+  id          text primary key,
+  created_at  timestamptz not null default now()
+);
+
+-- Deny-by-default like the other tables; the server uses the service-role key.
+alter table public.webhook_events enable row level security;

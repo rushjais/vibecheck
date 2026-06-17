@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { BRAND_NAME } from "@/lib/brand";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "LaunchGuard — Security & launch-readiness for your app",
+  title: `${BRAND_NAME} — Security & launch-readiness for your app`,
   description:
     "Paste a public GitHub repo and get a plain-English security and launch-readiness report.",
 };

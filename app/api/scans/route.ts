@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { validateRepoUrl } from "@/lib/validate-repo";
-import { checkScanRateLimit, clientIpFrom } from "@/lib/rate-limit";
+import {
+  checkScanRateLimit,
+  consumeFreeScan,
+  clientIpFrom,
+} from "@/lib/rate-limit";
+import { PACK_LABEL } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +28,7 @@ async function checkRepoState(
   try {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github+json",
-      "User-Agent": "LaunchGuard",
+      "User-Agent": "Vibecheck",
     };
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
@@ -77,17 +82,34 @@ export async function POST(request: Request) {
   // repo. Anonymous users keep the public-URL-only flow.
   let viewerId: string | null = null;
   let viewerToken: string | null = null;
+  let viewerCredits = 0;
   const {
     data: { user },
-  } = await createSupabaseServer().auth.getUser();
+  } = await (await createSupabaseServer()).auth.getUser();
   if (user) {
     viewerId = user.id;
     const { data: account } = await supabase
       .from("users")
-      .select("github_token")
+      .select("github_token, scan_credits")
       .eq("id", user.id)
       .maybeSingle();
     viewerToken = account?.github_token ?? null;
+    viewerCredits = account?.scan_credits ?? 0;
+  }
+
+  // Free-scan cap: people with credits scan freely (they spend a credit to
+  // unlock). Everyone else gets a limited number of free scans per IP.
+  if (viewerCredits <= 0) {
+    const { success } = await consumeFreeScan(ip);
+    if (!success) {
+      return NextResponse.json(
+        {
+          error: `You've used your free scans. Get ${PACK_LABEL} to keep scanning.`,
+          code: "free_limit",
+        },
+        { status: 402 },
+      );
+    }
   }
 
   // Check the repo. With the viewer's token, private repos they can access

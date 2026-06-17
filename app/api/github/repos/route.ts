@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createServerClient } from "@/lib/supabase";
+import { enforceApiRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +11,11 @@ export const dynamic = "force-dynamic";
  * OAuth token. The token is used server-side only and never returned to the
  * client — we only expose { full_name, private, default_branch }.
  */
-export async function GET() {
-  const auth = createSupabaseServer();
+export async function GET(request: Request) {
+  const limited = await enforceApiRateLimit(request);
+  if (limited) return limited;
+
+  const auth = (await createSupabaseServer());
   const {
     data: { user },
   } = await auth.auth.getUser();
@@ -38,7 +42,7 @@ export async function GET() {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
-          "User-Agent": "LaunchGuard",
+          "User-Agent": "Vibecheck",
           "X-GitHub-Api-Version": "2022-11-28",
         },
         cache: "no-store",

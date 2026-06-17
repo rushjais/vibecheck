@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ScanRow, ScanStatus } from "@/types/database";
+import { BRAND_NAME } from "@/lib/brand";
 
 /** Friendly, jargon-free copy for each stage of a scan. */
 const STAGE_COPY: Record<ScanStatus, { label: string; sub: string }> = {
@@ -114,7 +115,7 @@ export default function ScanProgress({
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 text-xs text-white">
             ✓
           </span>
-          LaunchGuard
+          {BRAND_NAME}
         </Link>
       </header>
 

@@ -29,7 +29,7 @@ async function fetchFile(
       {
         headers: {
           Accept: "application/vnd.github.raw+json",
-          "User-Agent": "LaunchGuard",
+          "User-Agent": "Vibecheck",
         },
         cache: "no-store",
       },

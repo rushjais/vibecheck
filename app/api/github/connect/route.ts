@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { enforceApiRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ export const dynamic = "force-dynamic";
  * trips back to `/`.
  */
 export async function GET(request: Request) {
+  const limited = await enforceApiRateLimit(request);
+  if (limited) return limited;
+
   const url = new URL(request.url);
   const origin = url.origin;
   const scanParam = url.searchParams.get("scan") ?? "";
@@ -22,7 +26,7 @@ export async function GET(request: Request) {
   const homePath = "/";
   const scanPath = `/scan/${scanParam}`;
 
-  const supabase = createSupabaseServer();
+  const supabase = (await createSupabaseServer());
   const {
     data: { user },
   } = await supabase.auth.getUser();

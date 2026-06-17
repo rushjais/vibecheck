@@ -6,13 +6,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const supabase = createServerClient();
   const { data } = await supabase
     .from("scans")
     .select("status, risk_score, summary")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (!data) {

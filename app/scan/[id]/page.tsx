@@ -7,6 +7,7 @@ import ReportView from "@/components/ReportView";
 import type { ClientFinding } from "@/components/FindingCard";
 import type { FixPr } from "@/components/FixPanel";
 import type { FindingRow, Severity } from "@/types/database";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,14 @@ function orderFindings(rows: FindingRow[]): FindingRow[] {
   });
 }
 
-/** Strip sensitive fields from locked findings so they never reach the client. */
-function toClientFinding(row: FindingRow): ClientFinding {
-  if (row.is_locked) {
+/**
+ * Strip sensitive fields from a finding when it's locked, so the locked content
+ * never reaches the client. `locked` is decided by the caller (reveal-all when
+ * the scan is unlocked; private scans lock everything until paid; public scans
+ * keep the top 3 free).
+ */
+function toClientFinding(row: FindingRow, locked: boolean): ClientFinding {
+  if (locked) {
     return {
       id: row.id,
       severity: row.severity,
@@ -60,23 +66,24 @@ function toClientFinding(row: FindingRow): ClientFinding {
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const { id } = await params;
   const supabase = createServerClient();
   const { data: scan } = await supabase
     .from("scans")
     .select("repo_url, status, risk_score, user_id")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   // Don't leak a private repo's name/score in metadata.
   if (!scan || scan.status !== "done" || scan.user_id !== null) {
-    return { title: "LaunchGuard scan" };
+    return { title: `${BRAND_NAME} scan` };
   }
 
   const repo = scan.repo_url.replace(/^https?:\/\/(www\.)?github\.com\//i, "");
   return {
-    title: `${repo} — ${scan.risk_score ?? "?"}/100 · LaunchGuard`,
+    title: `${repo} — ${scan.risk_score ?? "?"}/100 · ${BRAND_NAME}`,
     description: `Plain-English security & launch-readiness report for ${repo}.`,
   };
 }
@@ -85,14 +92,16 @@ export default async function ScanPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const { id } = await params;
+  const sp = await searchParams;
   const supabase = createServerClient();
   const { data: scan } = await supabase
     .from("scans")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (!scan) {
@@ -105,7 +114,7 @@ export default async function ScanPage({
 
   const {
     data: { user },
-  } = await createSupabaseServer().auth.getUser();
+  } = await (await createSupabaseServer()).auth.getUser();
 
   if (isPrivate && (!user || user.id !== scan.user_id)) {
     notFound();
@@ -117,21 +126,33 @@ export default async function ScanPage({
       .select("*")
       .eq("scan_id", scan.id);
 
-    const findings = orderFindings(rows ?? []).map(toClientFinding);
+    // Reveal rules: paid (unlocked) → everything; public + not paid → top 3
+    // free, rest locked; private + not paid → everything locked (no free tier).
+    const scanUnlocked = scan.unlocked === true;
+    const findings = orderFindings(rows ?? []).map((r) => {
+      const locked = scanUnlocked
+        ? false
+        : isPrivate
+          ? true
+          : r.is_locked;
+      return toClientFinding(r, locked);
+    });
 
-    // Any signed-in user gets the auto-fix PR panel (friends-only test).
+    // Signed-in extras: GitHub auto-fix panel + the user's scan-credit balance.
     let githubConnected = false;
     let githubLogin: string | null = null;
+    let credits = 0;
     let prs: FixPr[] = [];
 
     if (user) {
       const { data: account } = await supabase
         .from("users")
-        .select("github_login, github_token")
+        .select("github_login, github_token, scan_credits")
         .eq("id", user.id)
         .maybeSingle();
       githubConnected = Boolean(account?.github_token);
       githubLogin = account?.github_login ?? null;
+      credits = account?.scan_credits ?? 0;
 
       const { data: prRows } = await supabase
         .from("fix_prs")
@@ -150,7 +171,9 @@ export default async function ScanPage({
           scan.summary ?? "We finished reviewing your app. Here's what we found."
         }
         findings={findings}
-        unlocked={searchParams.unlocked === "1"}
+        unlocked={scanUnlocked}
+        justPaid={sp.purchased === "1"}
+        credits={credits}
         isSignedIn={Boolean(user)}
         isPrivate={isPrivate}
         githubConnected={githubConnected}

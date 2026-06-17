@@ -1,4 +1,4 @@
-# LaunchGuard scan engine
+# Vibecheck scan engine
 # System deps: git (clone), semgrep (SAST, via pip), gitleaks (secrets, binary).
 FROM python:3.12-slim
 

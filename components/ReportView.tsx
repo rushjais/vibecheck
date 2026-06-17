@@ -9,9 +9,11 @@ import FindingCard, {
   type ClientFinding,
 } from "@/components/FindingCard";
 import CopyButton from "@/components/CopyButton";
-import PaywallModal from "@/components/PaywallModal";
 import FixPanel, { type FixPr } from "@/components/FixPanel";
 import AuthControl from "@/components/AuthControl";
+import SignInModal from "@/components/SignInModal";
+import { PACK_LABEL } from "@/lib/pricing";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function ReportView({
   scanId,
@@ -20,6 +22,8 @@ export default function ReportView({
   summary,
   findings,
   unlocked = false,
+  justPaid = false,
+  credits = 0,
   isSignedIn = false,
   isPrivate = false,
   githubConnected = false,
@@ -32,6 +36,8 @@ export default function ReportView({
   summary: string;
   findings: ClientFinding[];
   unlocked?: boolean;
+  justPaid?: boolean;
+  credits?: number;
   isSignedIn?: boolean;
   isPrivate?: boolean;
   githubConnected?: boolean;
@@ -39,22 +45,73 @@ export default function ReportView({
   prs?: FixPr[];
 }) {
   const [shareUrl, setShareUrl] = useState(`/scan/${scanId}`);
-  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const logged = useRef(false);
   const unlockLogged = useRef(false);
+
+  const hasCredits = credits > 0;
 
   useEffect(() => {
     setShareUrl(window.location.href);
   }, []);
 
-  // Open the paywall + fire 'unlock_clicked' exactly once (PostHog + events).
-  function handleUnlock() {
+  // Fire 'unlock_clicked' once, then either spend a credit, buy a pack, or
+  // prompt sign-in (credits are per-account).
+  async function handleUnlock() {
     if (!unlockLogged.current) {
       unlockLogged.current = true;
       capture("unlock_clicked", { scan_id: scanId, risk_score: riskScore });
       void recordEvent("unlock_clicked", scanId, { risk_score: riskScore });
     }
-    setPaywallOpen(true);
+    setError(null);
+
+    if (hasCredits) {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scan_id: scanId }),
+        });
+        if (res.ok) {
+          window.location.reload();
+          return;
+        }
+        setBusy(false);
+        setError("Couldn't unlock — please try again.");
+      } catch {
+        setBusy(false);
+        setError("We couldn't reach our servers. Please try again.");
+      }
+      return;
+    }
+
+    if (!isSignedIn) {
+      setSignInOpen(true);
+      return;
+    }
+
+    // Signed in, no credits → buy a pack.
+    setBusy(true);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setBusy(false);
+      setError("Couldn't start checkout — please try again.");
+    } catch {
+      setBusy(false);
+      setError("We couldn't reach our servers. Please try again.");
+    }
   }
 
   // Fire 'scan_viewed' once: PostHog (client) + events table (via server route,
@@ -86,7 +143,7 @@ export default function ReportView({
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 text-xs text-white">
             ✓
           </span>
-          LaunchGuard
+          {BRAND_NAME}
         </Link>
         <div className="flex items-center gap-3">
           {/* No public share link for private-repo reports. */}
@@ -104,13 +161,26 @@ export default function ReportView({
       </header>
 
       <main className="mx-auto max-w-3xl px-5 pb-24">
-        {unlocked && (
+        {unlocked ? (
           <div className="mb-4 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-xs text-white">
               ✓
             </span>
-            You&apos;re on Pro — your full report is unlocked.
+            Your full report is unlocked.
+            {isSignedIn && credits > 0 && (
+              <span className="text-emerald-700">
+                {" "}
+                {credits} {credits === 1 ? "scan" : "scans"} left.
+              </span>
+            )}
           </div>
+        ) : (
+          justPaid && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              Payment received — your scans are ready and we&apos;re unlocking
+              this report. Refresh in a few seconds if findings are still hidden.
+            </div>
+          )
         )}
 
         {/* Repo label */}
@@ -213,31 +283,36 @@ export default function ReportView({
                   {lockedCount === 1 ? "issue is" : "issues are"} waiting
                 </h2>
                 <p className="mx-auto mt-1 max-w-md text-sm text-neutral-600">
-                  Unlock the full report to see every finding, why it matters,
-                  and a copy-paste fix for each one.
+                  {hasCredits
+                    ? `Unlock the full report — every finding, why it matters, and a copy-paste fix. You have ${credits} ${credits === 1 ? "scan" : "scans"} left.`
+                    : `See every finding, why it matters, and a copy-paste fix. ${PACK_LABEL}.`}
                 </p>
                 <button
                   type="button"
                   onClick={handleUnlock}
-                  className="mt-4 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                  disabled={busy}
+                  className="mt-4 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-70"
                 >
-                  Unlock full report
+                  {busy
+                    ? "Working…"
+                    : hasCredits
+                      ? `Unlock this report — uses 1 of your ${credits} scans`
+                      : `Get ${PACK_LABEL}`}
                 </button>
+                {error && (
+                  <p className="mt-2 text-sm text-red-600">{error}</p>
+                )}
               </div>
             )}
           </>
         )}
 
         <footer className="mt-12 text-center text-xs text-neutral-400">
-          Scanned with LaunchGuard · public code only, never any write access
+          Scanned with {BRAND_NAME} · public code only, never any write access
         </footer>
       </main>
 
-      <PaywallModal
-        open={paywallOpen}
-        onClose={() => setPaywallOpen(false)}
-        scanId={scanId}
-      />
+      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
     </div>
   );
 }

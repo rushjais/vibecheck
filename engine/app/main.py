@@ -1,4 +1,4 @@
-"""LaunchGuard scan engine — FastAPI entrypoint.
+"""Vibecheck scan engine — FastAPI entrypoint.
 
 SAFETY MODEL (see README): this service performs STATIC ANALYSIS ONLY. It clones
 public repositories and reads files. It NEVER installs dependencies, runs build
@@ -18,14 +18,14 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-app = FastAPI(title="LaunchGuard Scan Engine", version="1.0.0")
+app = FastAPI(title="Vibecheck Scan Engine", version="1.0.0")
 
 
 @app.get("/health")
 def health() -> dict:
     return {
         "status": "ok",
-        "service": "launchguard-scan-engine",
+        "service": "vibecheck-scan-engine",
         "supabase_configured": config.supabase_configured(),
     }
 

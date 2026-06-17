@@ -1,8 +1,8 @@
-# LaunchGuard
+# Vibecheck
 
 **Paste a GitHub repo, get a plain-English security & launch-readiness report — and a one-click PR that fixes the issues.**
 
-LaunchGuard is built for non-technical / AI-assisted ("vibecoder") founders. It scans a repository with real static-analysis tools, then uses an LLM to translate the raw findings into a report a non-engineer can act on: what's wrong, why it matters in real-world terms, and a copy-paste fix for an AI coding agent. Signed-in + GitHub-connected users can scan **private** repos and have LaunchGuard **open a pull request** that fixes the top issues.
+Vibecheck is built for non-technical / AI-assisted ("vibecoder") founders. It scans a repository with real static-analysis tools, then uses an LLM to translate the raw findings into a report a non-engineer can act on: what's wrong, why it matters in real-world terms, and a copy-paste fix for an AI coding agent. Signed-in + GitHub-connected users can scan **private** repos and have Vibecheck **open a pull request** that fixes the top issues.
 
 > **Status: friends-only test mode.** Everything is currently free and fully unlocked (no paywall). The Stripe billing code is in the repo but ungated. See [Operating modes](#operating-modes).
 
@@ -45,7 +45,7 @@ The **scan engine never executes the target repository** — it only clones and 
 | Auto-fix PRs | GitHub OAuth (`repo` scope) + GitHub REST API |
 | Rate limiting | Upstash Redis (sliding window) |
 | Analytics | PostHog + a durable `events` table |
-| Payments (dormant) | Stripe Checkout |
+| Payments | Stripe Checkout (one-time $9 unlock) |
 
 ---
 
@@ -84,7 +84,8 @@ The **scan engine never executes the target repository** — it only clones and 
 | `GET /api/github/repos` | List the user's repos (`full_name`, `private`, `default_branch`) |
 | `POST /api/github/fix` | Generate fixes with Claude, commit to a branch, open a PR |
 | `/auth/callback` · `/auth/confirm` | Supabase OAuth code exchange / magic-link `verifyOtp` |
-| `/api/checkout` · `…/return` | Stripe Checkout (present but dormant in test mode) |
+| `POST /api/checkout` | Start a one-time $9 Stripe Checkout for a scan (no sign-in) |
+| `POST /api/stripe/webhook` | `checkout.session.completed` → mark the scan unlocked (signature-verified) |
 
 ---
 
@@ -113,7 +114,7 @@ npm run dev                        # http://localhost:3000
 cd engine
 cp .env.example .env               # SUPABASE_URL + SUPABASE_SERVICE_KEY
 # Docker (recommended — semgrep & gitleaks baked in):
-docker build -t launchguard-engine . && docker run --rm -p 8000:8000 --env-file .env launchguard-engine
+docker build -t vibecheck-engine . && docker run --rm -p 8000:8000 --env-file .env vibecheck-engine
 # …or run directly (needs git, semgrep, gitleaks on PATH):
 #   python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 #   uvicorn app.main:app --port 8000
@@ -137,7 +138,7 @@ Then open http://localhost:3000 and scan a public repo (e.g. `https://github.com
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | for private repos / PRs | GitHub OAuth App; callback `…/api/github/callback` |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | optional | Per-IP rate limit; **no-ops if unset** |
 | `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | optional | Analytics; no-ops if unset |
-| `STRIPE_SECRET_KEY` | optional | Billing (dormant in test mode) |
+| `STRIPE_SECRET_KEY` · `STRIPE_PRICE_ID` · `STRIPE_WEBHOOK_SECRET` · `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | for unlocks | One-time $9 per-scan unlock + webhook |
 
 Engine (`engine/.env`): `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` — the same project URL and **service-role** key as the app (note the different variable names).
 
@@ -145,7 +146,7 @@ Engine (`engine/.env`): `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` — the same p
 
 ## Security model
 
-LaunchGuard handles other people's source code and GitHub tokens, so the data layer is locked down:
+Vibecheck handles other people's source code and GitHub tokens, so the data layer is locked down:
 
 - **Static analysis only.** The engine never installs dependencies, runs build scripts, or executes the repo. It shallow-clones into an ephemeral temp dir (deleted in a `finally`), enforces size/file caps before scanning, and runs each scanner as a bounded subprocess.
 - **RLS deny-by-default.** Row Level Security is enabled (with no anon policies) on `users`, `scans`, `findings`, `fix_prs`, and `events`. The public anon key that ships in the browser **cannot** read GitHub tokens or report contents — all reads/writes go through the **service-role** key in server routes.
@@ -191,14 +192,15 @@ scan_started → scan_viewed → unlock_clicked → checkout_started → checkou
 
 ---
 
-## Operating modes
+## Unlocking (one-time $9 per scan)
 
-The repo is currently in **friends-only test mode**:
-- All findings are unlocked (no paywall); the unlock modal never triggers.
-- Any signed-in user can connect GitHub and open auto-fix PRs (no Pro gate).
-- Stripe/checkout code is present but unused.
+The top 3 findings of every report are free; the rest are gated behind a **one-time $9 unlock for that scan — no sign-in required**:
 
-To re-enable billing later: re-introduce the locked-findings gate in `app/api/report/route.ts`, the Pro gate in `app/api/github/connect/route.ts`, and surface the paywall via `components/PaywallModal.tsx`.
+1. The "Unlock full report — $9" button `POST`s to `/api/checkout`, which creates a Stripe Checkout session (`mode: 'payment'`, price `STRIPE_PRICE_ID`, `metadata.scanId`) and returns the hosted URL.
+2. After payment, Stripe redirects to `/scan/<id>?unlocked=1` **and** sends `checkout.session.completed` to `/api/stripe/webhook`.
+3. The webhook (signature-verified with `STRIPE_WEBHOOK_SECRET`) flips `scans.unlocked = true` for `metadata.scanId`; the report page then reveals all findings.
+
+GitHub auto-fix PRs are open to any signed-in user (no Pro gate). Set up the $9 Stripe Price + webhook endpoint and the four `STRIPE_*` env vars to enable unlocking.
 
 ---
 
